@@ -9,8 +9,8 @@ import net.corda.core.utilities.getOrThrow
 import net.corda.finance.*
 import net.corda.testing.internal.chooseIdentityAndCert
 import net.corda.testing.node.*
-import net.corda.training.contract.IOUContract
-import net.corda.training.state.IOUState
+import net.corda.training.contract.ContratoTDBO
+import net.corda.training.state.EstadoTDBO
 import org.junit.*
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -23,7 +23,7 @@ import kotlin.test.assertFailsWith
  * On some machines/configurations you may have to provide a full path to the quasar.jar file.
  * On some machines/configurations you may have to use the "JAR manifest" option for shortening the command line.
  */
-class IOUIssueFlowTests {
+class IOUEmitirFlowTests {
     lateinit var mockNetwork: MockNetwork
     lateinit var a: StartedMockNode
     lateinit var b: StartedMockNode
@@ -56,10 +56,10 @@ class IOUIssueFlowTests {
      * - Create a [TransactionBuilder] and pass it a notary reference.
      * -- A notary [Party] object can be obtained from [FlowLogic.serviceHub.networkMapCache].
      * -- In this training project there is only one notary
-     * - Create an [IOUContract.Commands.Issue] inside a new [Command].
+     * - Create an [ContratoTDBO.Commands.Emitir] inside a new [Command].
      * -- The required signers will be the same as the state's participants
      * -- Add the [Command] to the transaction builder [addCommand].
-     * - Use the flow's [IOUState] parameter as the output state with [addOutputState]
+     * - Use the flow's [EstadoTDBO] parameter as the output state with [addOutputState]
      * - Extra credit: use [TransactionBuilder.withItems] to create the transaction instead
      * - Sign the transaction and convert it to a [SignedTransaction] using the [serviceHub.signInitialTransaction] method.
      * - Return the [SignedTransaction].
@@ -68,7 +68,7 @@ class IOUIssueFlowTests {
     fun flowReturnsCorrectlyFormedPartiallySignedTransaction() {
         val lender = a.info.chooseIdentityAndCert().party
         val borrower = b.info.chooseIdentityAndCert().party
-        val iou = IOUState(10.POUNDS, lender, borrower)
+        val iou = EstadoTDBO(10.POUNDS, lender, borrower)
         val flow = IOUIssueFlow(iou)
         val future = a.startFlow(flow)
         mockNetwork.runNetwork()
@@ -79,9 +79,9 @@ class IOUIssueFlowTests {
         // Check the transaction is well formed...
         // No outputs, one input IOUState and a command with the right properties.
         assert(ptx.tx.inputs.isEmpty())
-        assert(ptx.tx.outputs.single().data is IOUState)
+        assert(ptx.tx.outputs.single().data is EstadoTDBO)
         val command = ptx.tx.commands.single()
-        assert(command.value is IOUContract.Commands.Issue)
+        assert(command.value is ContratoTDBO.Commands.Emitir)
         assert(command.signers.toSet() == iou.participants.map { it.owningKey }.toSet())
         ptx.verifySignaturesExcept(
             borrower.owningKey,
@@ -91,7 +91,7 @@ class IOUIssueFlowTests {
 
     /**
      * Task 2.
-     * Now we have a well formed transaction, we need to properly verify it using the [IOUContract].
+     * Now we have a well formed transaction, we need to properly verify it using the [ContratoTDBO].
      * TODO: Amend the [IOUIssueFlow] to verify the transaction as well as sign it.
      * Hint: You can verify on the builder directly prior to finalizing the transaction. This way
      * you can confirm the transaction prior to making it immutable with the signature.
@@ -101,17 +101,17 @@ class IOUIssueFlowTests {
         // Check that a zero amount IOU fails.
         val lender = a.info.chooseIdentityAndCert().party
         val borrower = b.info.chooseIdentityAndCert().party
-        val zeroIou = IOUState(0.POUNDS, lender, borrower)
+        val zeroIou = EstadoTDBO(0.POUNDS, lender, borrower)
         val futureOne = a.startFlow(IOUIssueFlow(zeroIou))
         mockNetwork.runNetwork()
         assertFailsWith<TransactionVerificationException> { futureOne.getOrThrow() }
         // Check that an IOU with the same participants fails.
-        val borrowerIsLenderIou = IOUState(10.POUNDS, lender, lender)
+        val borrowerIsLenderIou = EstadoTDBO(10.POUNDS, lender, lender)
         val futureTwo = a.startFlow(IOUIssueFlow(borrowerIsLenderIou))
         mockNetwork.runNetwork()
         assertFailsWith<TransactionVerificationException> { futureTwo.getOrThrow() }
         // Check a good IOU passes.
-        val iou = IOUState(10.POUNDS, lender, borrower)
+        val iou = EstadoTDBO(10.POUNDS, lender, borrower)
         val futureThree = a.startFlow(IOUIssueFlow(iou))
         mockNetwork.runNetwork()
         futureThree.getOrThrow()
@@ -146,7 +146,7 @@ class IOUIssueFlowTests {
     fun flowReturnsTransactionSignedByBothParties() {
         val lender = a.info.chooseIdentityAndCert().party
         val borrower = b.info.chooseIdentityAndCert().party
-        val iou = IOUState(10.POUNDS, lender, borrower)
+        val iou = EstadoTDBO(10.POUNDS, lender, borrower)
         val flow = IOUIssueFlow(iou)
         val future = a.startFlow(flow)
         mockNetwork.runNetwork()
@@ -170,7 +170,7 @@ class IOUIssueFlowTests {
     fun flowRecordsTheSameTransactionInBothPartyVaults() {
         val lender = a.info.chooseIdentityAndCert().party
         val borrower = b.info.chooseIdentityAndCert().party
-        val iou = IOUState(10.POUNDS, lender, borrower)
+        val iou = EstadoTDBO(10.POUNDS, lender, borrower)
         val flow = IOUIssueFlow(iou)
         val future = a.startFlow(flow)
         mockNetwork.runNetwork()

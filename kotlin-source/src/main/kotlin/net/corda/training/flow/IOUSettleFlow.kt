@@ -13,11 +13,8 @@ import net.corda.core.transactions.TransactionBuilder
 import net.corda.core.utilities.OpaqueBytes
 import net.corda.finance.contracts.asset.Cash
 import net.corda.finance.flows.CashIssueFlow
-import net.corda.training.contract.IOUContract
-import net.corda.training.state.IOUState
-import net.corda.core.contracts.requireThat
-import net.corda.core.identity.PartyAndCertificate
-import net.corda.finance.contracts.asset.PartyAndAmount
+import net.corda.training.contract.ContratoTDBO
+import net.corda.training.state.EstadoTDBO
 import net.corda.finance.workflows.asset.CashUtils
 import net.corda.finance.workflows.getCashBalance
 import java.util.*
@@ -35,11 +32,11 @@ class IOUSettleFlow(val linearId: UniqueIdentifier, val amount: Amount<Currency>
     override fun call(): SignedTransaction {
         // Step 1. Retrieve the IOU state from the vault.
         val queryCriteria = QueryCriteria.LinearStateQueryCriteria(linearId = listOf(linearId))
-        val iouToSettle = serviceHub.vaultService.queryBy<IOUState>(queryCriteria).states.single()
-        val counterparty = iouToSettle.state.data.lender
+        val iouToSettle = serviceHub.vaultService.queryBy<EstadoTDBO>(queryCriteria).states.single()
+        val counterparty = iouToSettle.state.data.prestamista
 
         // Step 2. Check the party running this flow is the borrower.
-        if (ourIdentity != iouToSettle.state.data.borrower) {
+        if (ourIdentity != iouToSettle.state.data.deudor) {
             throw IllegalArgumentException("IOU settlement flow must be initiated by the borrower.")
         }
 
@@ -52,8 +49,8 @@ class IOUSettleFlow(val linearId: UniqueIdentifier, val amount: Amount<Currency>
 
         if (cashBalance < amount) {
             throw IllegalArgumentException("Borrower has only $cashBalance but needs $amount to settle.")
-        } else if (amount > (iouToSettle.state.data.amount - iouToSettle.state.data.paid)) {
-            throw IllegalArgumentException("Borrower tried to settle with $amount but only needs ${ (iouToSettle.state.data.amount - iouToSettle.state.data.paid) }")
+        } else if (amount > (iouToSettle.state.data.cantidad - iouToSettle.state.data.pagado)) {
+            throw IllegalArgumentException("Borrower tried to settle with $amount but only needs ${ (iouToSettle.state.data.cantidad - iouToSettle.state.data.pagado) }")
         }
 
         // Step 5. Get some cash from the vault and add a spend to our transaction builder.
@@ -62,16 +59,16 @@ class IOUSettleFlow(val linearId: UniqueIdentifier, val amount: Amount<Currency>
         val (_, cashKeys) = CashUtils.generateSpend(serviceHub, builder, amount, ourIdentityAndCert, counterparty)
 
         // Step 6. Add the IOU input state and settle command to the transaction builder.
-        val settleCommand = Command(IOUContract.Commands.Settle(), listOf(counterparty.owningKey, ourIdentity.owningKey))
+        val settleCommand = Command(ContratoTDBO.Commands.Liquidar(), listOf(counterparty.owningKey, ourIdentity.owningKey))
         // Add the input IOU and IOU settle command.
         builder.addCommand(settleCommand)
         builder.addInputState(iouToSettle)
 
         // Step 7. Only add an output IOU state of the IOU has not been fully settled.
-        val amountRemaining = iouToSettle.state.data.amount - iouToSettle.state.data.paid - amount
+        val amountRemaining = iouToSettle.state.data.cantidad - iouToSettle.state.data.pagado - amount
         if (amountRemaining > Amount(0, amount.token)) {
-            val settledIOU: IOUState = iouToSettle.state.data.pay(amount)
-            builder.addOutputState(settledIOU, IOUContract.IOU_CONTRACT_ID)
+            val settledIOU: EstadoTDBO = iouToSettle.state.data.pagar(amount)
+            builder.addOutputState(settledIOU, ContratoTDBO.TDBO_CONTRACT_ID)
         }
 
         // Step 8. Verify and sign the transaction.

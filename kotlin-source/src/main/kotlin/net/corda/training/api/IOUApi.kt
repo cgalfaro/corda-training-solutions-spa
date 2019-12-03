@@ -18,7 +18,7 @@ import net.corda.training.flow.IOUIssueFlow
 import net.corda.training.flow.IOUSettleFlow
 import net.corda.training.flow.IOUTransferFlow
 import net.corda.training.flow.SelfIssueCashFlow
-import net.corda.training.state.IOUState
+import net.corda.training.state.EstadoTDBO
 import org.bouncycastle.asn1.x500.X500Name
 import org.bouncycastle.asn1.x500.style.BCStyle
 import org.slf4j.Logger
@@ -75,14 +75,14 @@ class IOUApi(val rpcOps: CordaRPCOps) {
      * Task 1
      * Displays all IOU states that exist in the node's vault.
      * TODO: Return a list of IOUStates on ledger
-     * Hint - Use [rpcOps] to query the vault all unconsumed [IOUState]s
+     * Hint - Use [rpcOps] to query the vault all unconsumed [EstadoTDBO]s
      */
     @GET
     @Path("ious")
     @Produces(MediaType.APPLICATION_JSON)
     fun getIOUs(): List<StateAndRef<ContractState>> {
         // Filter by state type: IOU.
-        return rpcOps.vaultQueryBy<IOUState>().states
+        return rpcOps.vaultQueryBy<EstadoTDBO>().states
     }
 
     /**
@@ -120,7 +120,7 @@ class IOUApi(val rpcOps: CordaRPCOps) {
         val lender = rpcOps.wellKnownPartyFromX500Name(CordaX500Name.parse(party)) ?: throw IllegalArgumentException("Unknown party name.")
         // Create a new IOU state using the parameters given.
         try {
-            val state = IOUState(Amount(amount.toLong() * 100, Currency.getInstance(currency)), lender, me)
+            val state = EstadoTDBO(Amount(amount.toLong() * 100, Currency.getInstance(currency)), lender, me)
             // Start the IOUIssueFlow. We block and waits for the flow to return.
             val result = rpcOps.startTrackedFlow(::IOUIssueFlow, state).returnValue.get()
             // Return the response.

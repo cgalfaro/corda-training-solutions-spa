@@ -6,8 +6,8 @@ import net.corda.core.transactions.SignedTransaction
 import net.corda.finance.*
 import net.corda.finance.contracts.asset.Cash
 import net.corda.testing.node.MockNetwork
-import net.corda.training.contract.IOUContract
-import net.corda.training.state.IOUState
+import net.corda.training.contract.ContratoTDBO
+import net.corda.training.state.EstadoTDBO
 import net.corda.core.identity.Party
 import net.corda.core.internal.packageName
 import net.corda.core.utilities.getOrThrow
@@ -26,7 +26,7 @@ import kotlin.test.assertFailsWith
  * Practical exercise instructions Flows part 3.
  * Uncomment the unit tests and use the hints + unit test body to complete the FLows such that the unit tests pass.
  */
-class IOUSettleFlowTests {
+class IOULiquidarFlowTests {
     lateinit var mockNetwork: MockNetwork
     lateinit var a: StartedMockNode
     lateinit var b: StartedMockNode
@@ -54,7 +54,7 @@ class IOUSettleFlowTests {
     /**
      * Issue an IOU on the ledger, we need to do this before we can transfer one.
      */
-    private fun issueIou(iou: IOUState): SignedTransaction {
+    private fun issueIou(iou: EstadoTDBO): SignedTransaction {
         val flow = IOUIssueFlow(iou)
         val future = a.startFlow(flow)
         mockNetwork.runNetwork()
@@ -73,24 +73,24 @@ class IOUSettleFlowTests {
 
     /**
      * Task 1.
-     * The first task is to grab the [IOUState] for the given [linearId] from the vault, assemble a transaction
+     * The first task is to grab the [EstadoTDBO] for the given [linearId] from the vault, assemble a transaction
      * and sign it.
      * TODO: Grab the IOU for the given [linearId] from the vault, build and sign the settle transaction.
      * Hints:
-     * - Use the code from the [IOUTransferFlow] to get the correct [IOUState] from the vault.
+     * - Use the code from the [IOUTransferFlow] to get the correct [EstadoTDBO] from the vault.
      * - You will need to use the [CashUtils.generateSpend] functionality of the vault to add the cash states and cash command
      *   to your transaction. The API is quite simple. It takes a reference to a [ServiceHub], the [TransactionBuilder],
      *   an [Amount], [PartyAndCertificate] representing out identity (sender) and the [Party] object for the recipient.
      *   The function will mutate your builder by adding the states and commands.
-     * - You then need to produce the output [IOUState] by using the [IOUState.pay] function.
-     * - Add the input [IOUState] [StateAndRef] and the new output [IOUState] to the transaction.
+     * - You then need to produce the output [EstadoTDBO] by using the [EstadoTDBO.pagar] function.
+     * - Add the input [EstadoTDBO] [StateAndRef] and the new output [EstadoTDBO] to the transaction.
      * - Sign the transaction and return it.
      */
     @Test
     fun flowReturnsCorrectlyFormedPartiallySignedTransaction() {
-        val stx = issueIou(IOUState(10.POUNDS, b.info.chooseIdentityAndCert().party, a.info.chooseIdentityAndCert().party))
+        val stx = issueIou(EstadoTDBO(10.POUNDS, b.info.chooseIdentityAndCert().party, a.info.chooseIdentityAndCert().party))
         issueCash(5.POUNDS)
-        val inputIou = stx.tx.outputs.single().data as IOUState
+        val inputIou = stx.tx.outputs.single().data as EstadoTDBO
         val flow = IOUSettleFlow(inputIou.linearId, 5.POUNDS)
         val future = a.startFlow(flow)
         mockNetwork.runNetwork()
@@ -101,10 +101,10 @@ class IOUSettleFlowTests {
             val ledgerTx = settleResult.toLedgerTransaction(a.services, false)
             assert(ledgerTx.inputs.size == 2)
             assert(ledgerTx.outputs.size == 2)
-            val outputIou = ledgerTx.outputs.map { it.data }.filterIsInstance<IOUState>().single()
+            val outputIou = ledgerTx.outputs.map { it.data }.filterIsInstance<EstadoTDBO>().single()
             assertEquals(
                     outputIou,
-                    inputIou.pay(5.POUNDS))
+                    inputIou.pagar(5.POUNDS))
             // Sum all the output cash. This is complicated as there may be multiple cash output states with not all of them
             // being assigned to the lender.
             val outputCashSum = ledgerTx.outputs
@@ -116,9 +116,9 @@ class IOUSettleFlowTests {
             // Compare the cash assigned to the lender with the amount claimed is being settled by the borrower.
             assertEquals(
                     outputCashSum,
-                    (inputIou.amount - inputIou.paid - outputIou.paid))
-            val command = ledgerTx.commands.requireSingleCommand<IOUContract.Commands>()
-            assert(command.value == IOUContract.Commands.Settle())
+                    (inputIou.cantidad - inputIou.pagado - outputIou.pagado))
+            val command = ledgerTx.commands.requireSingleCommand<ContratoTDBO.Commands>()
+            assert(command.value == ContratoTDBO.Commands.Liquidar())
             // Check the transaction has been signed by the borrower.
             settleResult.verifySignaturesExcept(b.info.chooseIdentityAndCert().party.owningKey,
                     mockNetwork.defaultNotaryNode.info.legalIdentitiesAndCerts.first().owningKey)
@@ -133,9 +133,9 @@ class IOUSettleFlowTests {
      */
     @Test
     fun settleFlowCanOnlyBeRunByBorrower() {
-        val stx = issueIou(IOUState(10.POUNDS, b.info.chooseIdentityAndCert().party, a.info.chooseIdentityAndCert().party))
+        val stx = issueIou(EstadoTDBO(10.POUNDS, b.info.chooseIdentityAndCert().party, a.info.chooseIdentityAndCert().party))
         issueCash(5.POUNDS)
-        val inputIou = stx.tx.outputs.single().data as IOUState
+        val inputIou = stx.tx.outputs.single().data as EstadoTDBO
         val flow = IOUSettleFlow(inputIou.linearId, 5.POUNDS)
         val future = b.startFlow(flow)
         mockNetwork.runNetwork()
@@ -152,8 +152,8 @@ class IOUSettleFlowTests {
      */
     @Test
     fun borrowerMustHaveCashInRightCurrency() {
-        val stx = issueIou(IOUState(10.POUNDS, b.info.chooseIdentityAndCert().party, a.info.chooseIdentityAndCert().party))
-        val inputIou = stx.tx.outputs.single().data as IOUState
+        val stx = issueIou(EstadoTDBO(10.POUNDS, b.info.chooseIdentityAndCert().party, a.info.chooseIdentityAndCert().party))
+        val inputIou = stx.tx.outputs.single().data as EstadoTDBO
         val flow = IOUSettleFlow(inputIou.linearId, 5.POUNDS)
         val future = a.startFlow(flow)
         mockNetwork.runNetwork()
@@ -168,9 +168,9 @@ class IOUSettleFlowTests {
      */
     @Test
     fun borrowerMustHaveEnoughCashInRightCurrency() {
-        val stx = issueIou(IOUState(10.POUNDS, b.info.chooseIdentityAndCert().party, a.info.chooseIdentityAndCert().party))
+        val stx = issueIou(EstadoTDBO(10.POUNDS, b.info.chooseIdentityAndCert().party, a.info.chooseIdentityAndCert().party))
         issueCash(1.POUNDS)
-        val inputIou = stx.tx.outputs.single().data as IOUState
+        val inputIou = stx.tx.outputs.single().data as EstadoTDBO
         val flow = IOUSettleFlow(inputIou.linearId, 5.POUNDS)
         val future = a.startFlow(flow)
         mockNetwork.runNetwork()
@@ -184,9 +184,9 @@ class IOUSettleFlowTests {
      */
     @Test
     fun flowReturnsTransactionSignedByBothParties() {
-        val stx = issueIou(IOUState(10.POUNDS, b.info.chooseIdentityAndCert().party, a.info.chooseIdentityAndCert().party))
+        val stx = issueIou(EstadoTDBO(10.POUNDS, b.info.chooseIdentityAndCert().party, a.info.chooseIdentityAndCert().party))
         issueCash(5.POUNDS)
-        val inputIou = stx.tx.outputs.single().data as IOUState
+        val inputIou = stx.tx.outputs.single().data as EstadoTDBO
         val flow = IOUSettleFlow(inputIou.linearId, 5.POUNDS)
         val future = a.startFlow(flow)
         mockNetwork.runNetwork()
@@ -203,9 +203,9 @@ class IOUSettleFlowTests {
      */
     @Test
     fun flowReturnsCommittedTransaction() {
-        val stx = issueIou(IOUState(10.POUNDS, b.info.chooseIdentityAndCert().party, a.info.chooseIdentityAndCert().party))
+        val stx = issueIou(EstadoTDBO(10.POUNDS, b.info.chooseIdentityAndCert().party, a.info.chooseIdentityAndCert().party))
         issueCash(5.POUNDS)
-        val inputIou = stx.tx.outputs.single().data as IOUState
+        val inputIou = stx.tx.outputs.single().data as EstadoTDBO
         val flow = IOUSettleFlow(inputIou.linearId, 5.POUNDS)
         val future = a.startFlow(flow)
         mockNetwork.runNetwork()

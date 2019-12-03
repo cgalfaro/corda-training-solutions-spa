@@ -6,6 +6,10 @@
       <module name="com.template.java-source.test" target="1.8" />
       <module name="com.template.kotlin-source.main" target="1.8" />
       <module name="com.template.kotlin-source.test" target="1.8" />
+      <module name="corda-training-solutions-spa.java-source.main" target="1.8" />
+      <module name="corda-training-solutions-spa.java-source.test" target="1.8" />
+      <module name="corda-training-solutions-spa.kotlin-source.main" target="1.8" />
+      <module name="corda-training-solutions-spa.kotlin-source.test" target="1.8" />
     </bytecodeTargetLevel>
   </component>
   <component name="JavacSettings">

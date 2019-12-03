@@ -11,8 +11,8 @@ import net.corda.testing.node.MockNetwork
 import net.corda.testing.node.MockNetworkNotarySpec
 import net.corda.testing.node.MockNodeParameters
 import net.corda.testing.node.StartedMockNode
-import net.corda.training.contract.IOUContract
-import net.corda.training.state.IOUState
+import net.corda.training.contract.ContratoTDBO
+import net.corda.training.state.EstadoTDBO
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -22,7 +22,7 @@ import kotlin.test.assertFailsWith
  * Practical exercise instructions Flows part 2.
  * Uncomment the unit tests and use the hints + unit test body to complete the Flows such that the unit tests pass.
  */
-class IOUTransferFlowTests {
+class IOUTransferirFlowTests {
     lateinit var mockNetwork: MockNetwork
     lateinit var a: StartedMockNode
     lateinit var b: StartedMockNode
@@ -50,7 +50,7 @@ class IOUTransferFlowTests {
     /**
      * Issue an IOU on the ledger, we need to do this before we can transfer one.
      */
-    private fun issueIou(iou: IOUState): SignedTransaction {
+    private fun issueIou(iou: EstadoTDBO): SignedTransaction {
         val flow = IOUIssueFlow(iou)
         val future = a.startFlow(flow)
         mockNetwork.runNetwork()
@@ -66,8 +66,8 @@ class IOUTransferFlowTests {
      * - This time our transaction has an input state, so we need to retrieve it from the vault!
      * - You can use the [serviceHub.vaultService.queryBy] method to get the latest linear states of a particular
      *   type from the vault. It returns a list of states matching your query.
-     * - Use the [UniqueIdentifier] which is passed into the flow to retrieve the correct [IOUState].
-     * - Use the [IOUState.withNewLender] method to create a copy of the state with a new lender.
+     * - Use the [UniqueIdentifier] which is passed into the flow to retrieve the correct [EstadoTDBO].
+     * - Use the [EstadoTDBO.conNuevoPrestamista] method to create a copy of the state with a new lender.
      * - Create a Command - we will need to use the Transfer command.
      * - Remember, as we are involving three parties we will need to collect three signatures, so need to add three
      *   [PublicKey]s to the Command's signers list. We can get the signers from the input IOU and the new IOU you
@@ -79,8 +79,8 @@ class IOUTransferFlowTests {
     fun flowReturnsCorrectlyFormedPartiallySignedTransaction() {
         val lender = a.info.chooseIdentityAndCert().party
         val borrower = b.info.chooseIdentityAndCert().party
-        val stx = issueIou(IOUState(10.POUNDS, lender, borrower))
-        val inputIou = stx.tx.outputs.single().data as IOUState
+        val stx = issueIou(EstadoTDBO(10.POUNDS, lender, borrower))
+        val inputIou = stx.tx.outputs.single().data as EstadoTDBO
         val flow = IOUTransferFlow(inputIou.linearId, c.info.chooseIdentityAndCert().party)
         val future = a.startFlow(flow)
         mockNetwork.runNetwork()
@@ -91,10 +91,10 @@ class IOUTransferFlowTests {
         assert(ptx.tx.outputs.size == 1)
         assert(ptx.tx.inputs.single() == StateRef(stx.id, 0))
         println("Input state ref: ${ptx.tx.inputs.single()} == ${StateRef(stx.id, 0)}")
-        val outputIou = ptx.tx.outputs.single().data as IOUState
+        val outputIou = ptx.tx.outputs.single().data as EstadoTDBO
         println("Output state: $outputIou")
         val command = ptx.tx.commands.single()
-        assert(command.value == IOUContract.Commands.Transfer())
+        assert(command.value == ContratoTDBO.Commands.Transferir())
         ptx.verifySignaturesExcept(b.info.chooseIdentityAndCert().party.owningKey, c.info.chooseIdentityAndCert().party.owningKey,
                 mockNetwork.defaultNotaryNode.info.legalIdentitiesAndCerts.first().owningKey)
     }
@@ -112,8 +112,8 @@ class IOUTransferFlowTests {
     fun flowCanOnlyBeRunByCurrentLender() {
         val lender = a.info.chooseIdentityAndCert().party
         val borrower = b.info.chooseIdentityAndCert().party
-        val stx = issueIou(IOUState(10.POUNDS, lender, borrower))
-        val inputIou = stx.tx.outputs.single().data as IOUState
+        val stx = issueIou(EstadoTDBO(10.POUNDS, lender, borrower))
+        val inputIou = stx.tx.outputs.single().data as EstadoTDBO
         val flow = IOUTransferFlow(inputIou.linearId, c.info.chooseIdentityAndCert().party)
         val future = b.startFlow(flow)
         mockNetwork.runNetwork()
@@ -122,15 +122,15 @@ class IOUTransferFlowTests {
 
     /**
      * Task 3.
-     * Check that an [IOUState] cannot be transferred to the same lender.
+     * Check that an [EstadoTDBO] cannot be transferred to the same lender.
      * TODO: You shouldn't have to do anything additional to get this test to pass. Belts and Braces!
      */
     @Test
     fun iouCannotBeTransferredToSameParty() {
         val lender = a.info.chooseIdentityAndCert().party
         val borrower = b.info.chooseIdentityAndCert().party
-        val stx = issueIou(IOUState(10.POUNDS, lender, borrower))
-        val inputIou = stx.tx.outputs.single().data as IOUState
+        val stx = issueIou(EstadoTDBO(10.POUNDS, lender, borrower))
+        val inputIou = stx.tx.outputs.single().data as EstadoTDBO
         val flow = IOUTransferFlow(inputIou.linearId, lender)
         val future = a.startFlow(flow)
         mockNetwork.runNetwork()
@@ -148,8 +148,8 @@ class IOUTransferFlowTests {
     fun flowReturnsTransactionSignedByAllParties() {
         val lender = a.info.chooseIdentityAndCert().party
         val borrower = b.info.chooseIdentityAndCert().party
-        val stx = issueIou(IOUState(10.POUNDS, lender, borrower))
-        val inputIou = stx.tx.outputs.single().data as IOUState
+        val stx = issueIou(EstadoTDBO(10.POUNDS, lender, borrower))
+        val inputIou = stx.tx.outputs.single().data as EstadoTDBO
         val flow = IOUTransferFlow(inputIou.linearId, c.info.chooseIdentityAndCert().party)
         val future = a.startFlow(flow)
         mockNetwork.runNetwork()
@@ -165,8 +165,8 @@ class IOUTransferFlowTests {
     fun flowReturnsTransactionSignedByAllPartiesAndNotary() {
         val lender = a.info.chooseIdentityAndCert().party
         val borrower = b.info.chooseIdentityAndCert().party
-        val stx = issueIou(IOUState(10.POUNDS, lender, borrower))
-        val inputIou = stx.tx.outputs.single().data as IOUState
+        val stx = issueIou(EstadoTDBO(10.POUNDS, lender, borrower))
+        val inputIou = stx.tx.outputs.single().data as EstadoTDBO
         val flow = IOUTransferFlow(inputIou.linearId, c.info.chooseIdentityAndCert().party)
         val future = a.startFlow(flow)
         mockNetwork.runNetwork()

@@ -11,8 +11,8 @@ import net.corda.core.node.services.queryBy
 import net.corda.core.node.services.vault.QueryCriteria
 import net.corda.core.transactions.SignedTransaction
 import net.corda.core.transactions.TransactionBuilder
-import net.corda.training.contract.IOUContract
-import net.corda.training.state.IOUState
+import net.corda.training.contract.ContratoTDBO
+import net.corda.training.state.EstadoTDBO
 
 /**
  * This is the flow which handles transfers of existing IOUs on the ledger.
@@ -28,20 +28,20 @@ class IOUTransferFlow(val linearId: UniqueIdentifier,
     override fun call(): SignedTransaction {
         // Stage 1. Retrieve IOU specified by linearId from the vault.
         val queryCriteria = QueryCriteria.LinearStateQueryCriteria(linearId = listOf(linearId))
-        val iouStateAndRef =  serviceHub.vaultService.queryBy<IOUState>(queryCriteria).states.single()
+        val iouStateAndRef =  serviceHub.vaultService.queryBy<EstadoTDBO>(queryCriteria).states.single()
         val inputIou = iouStateAndRef.state.data
 
         // Stage 2. This flow can only be initiated by the current recipient.
-        if (ourIdentity != inputIou.lender) {
+        if (ourIdentity != inputIou.prestamista) {
             throw IllegalArgumentException("IOU transfer can only be initiated by the IOU lender.")
         }
 
         // Stage 3. Create the new IOU state reflecting a new lender.
-        val outputIou = inputIou.withNewLender(newLender)
+        val outputIou = inputIou.conNuevoPrestamista(newLender)
 
         // Stage 4. Create the transfer command.
         val signers = (inputIou.participants + newLender).map { it.owningKey }
-        val transferCommand = Command(IOUContract.Commands.Transfer(), signers)
+        val transferCommand = Command(ContratoTDBO.Commands.Transferir(), signers)
 
         // Stage 5. Get a reference to a transaction builder.
         // Note: ongoing work to support multiple notary identities is still in progress.
@@ -50,7 +50,7 @@ class IOUTransferFlow(val linearId: UniqueIdentifier,
 
         // Stage 6. Create the transaction which comprises one input, one output and one command.
         builder.withItems(iouStateAndRef,
-                        StateAndContract(outputIou, IOUContract.IOU_CONTRACT_ID),
+                        StateAndContract(outputIou, ContratoTDBO.TDBO_CONTRACT_ID),
                         transferCommand)
 
         // Stage 7. Verify and sign the transaction.
@@ -78,7 +78,7 @@ class IOUTransferFlowResponder(val flowSession: FlowSession): FlowLogic<SignedTr
         val signedTransactionFlow = object : SignTransactionFlow(flowSession) {
             override fun checkTransaction(stx: SignedTransaction) = requireThat {
                 val output = stx.tx.outputs.single().data
-                "This must be an IOU transaction" using (output is IOUState)
+                "This must be an IOU transaction" using (output is EstadoTDBO)
             }
         }
 
