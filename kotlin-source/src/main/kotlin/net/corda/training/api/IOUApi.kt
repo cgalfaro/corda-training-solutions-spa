@@ -14,9 +14,9 @@ import net.corda.core.node.NodeInfo
 import net.corda.core.utilities.loggerFor
 import net.corda.finance.contracts.asset.Cash
 import net.corda.finance.workflows.getCashBalances
-import net.corda.training.flow.IOUIssueFlow
-import net.corda.training.flow.IOUSettleFlow
-import net.corda.training.flow.IOUTransferFlow
+import net.corda.training.flow.TDBOEmitirFlow
+import net.corda.training.flow.TDBOLiquidarFlow
+import net.corda.training.flow.TDBOTransferirFlow
 import net.corda.training.flow.SelfIssueCashFlow
 import net.corda.training.state.EstadoTDBO
 import org.bouncycastle.asn1.x500.X500Name
@@ -122,7 +122,7 @@ class IOUApi(val rpcOps: CordaRPCOps) {
         try {
             val state = EstadoTDBO(Amount(amount.toLong() * 100, Currency.getInstance(currency)), lender, me)
             // Start the IOUIssueFlow. We block and waits for the flow to return.
-            val result = rpcOps.startTrackedFlow(::IOUIssueFlow, state).returnValue.get()
+            val result = rpcOps.startTrackedFlow(::TDBOEmitirFlow, state).returnValue.get()
             // Return the response.
             return Response
                     .status(Response.Status.CREATED)
@@ -147,7 +147,7 @@ class IOUApi(val rpcOps: CordaRPCOps) {
         val linearId = UniqueIdentifier.fromString(id)
         val newLender = rpcOps.wellKnownPartyFromX500Name(CordaX500Name.parse(party)) ?: throw IllegalArgumentException("Unknown party name.")
         try {
-            rpcOps.startFlow(::IOUTransferFlow, linearId, newLender).returnValue.get()
+            rpcOps.startFlow(::TDBOTransferirFlow, linearId, newLender).returnValue.get()
             return Response.status(Response.Status.CREATED).entity("IOU $id transferred to $party.").build()
 
         } catch (e: Exception) {
@@ -172,7 +172,7 @@ class IOUApi(val rpcOps: CordaRPCOps) {
         val settleAmount = Amount(amount.toLong() * 100, Currency.getInstance(currency))
 
         try {
-            rpcOps.startFlow(::IOUSettleFlow, linearId, settleAmount).returnValue.get()
+            rpcOps.startFlow(::TDBOLiquidarFlow, linearId, settleAmount).returnValue.get()
             return Response.status(Response.Status.CREATED).entity("$amount $currency paid off on IOU id $id.").build()
 
         } catch (e: Exception) {
